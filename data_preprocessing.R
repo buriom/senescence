@@ -1,4 +1,4 @@
-library(tidyverse)
+library(data.table)
 
 
 .args <- c("/home/buri/cancerData/lip.csv", "lip.rds")
@@ -6,15 +6,27 @@ library(tidyverse)
 
 
 #********************************** data load ********************************
-df <- read.csv(.args[1], na.strings = "-")
-df <- df[,c("Age","Rate.per.100.000")]
+df <- fread(.args[1], na.strings = "-")
+df <- df[,c("Age","Rate per 100,000")]
+df <- within(df, {
+  Age <- gsub("<",   "0-",   Age)
+  Age <- gsub("\\+", "-100", Age)
+})
 
-df1 <- as.tibble(df)
+#str_split_fixed(df$Age,"-",2)
+df <- within(df, {
+  Age.lb <- as.integer(sub("-.+", "", Age))
+  Age.ub <- as.integer(sub(".*-", "", Age))
+})
 
 #remove NA rows
-df <- df[!is.na(df$Rate.per.100.000),]
+df <- df[
+  Age.ub >= 20 &
+  !is.na(`Rate per 100,000`)
+]
+
 #replace age ranges by mid-points
-df$Age <- seq(22,90,5)[(15 -(dim(df)[1])):14]#mid points no the best index for
+#df$Age <- seq(22,90,5)[(15 -(dim(df)[1])):14]#mid points no the best index for
 #the ranges
-View(df)
+# View(df)
 saveRDS(df, tail(.args,1))
