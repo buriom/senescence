@@ -10,17 +10,15 @@ library("minpack.lm")
 
 #Implementing the Prod symbol in the equation f_t
 mltpy <- function(j, x, beta, h, n){
-  #pause(0.1)
   total <- prod(sapply(1:j,function(k) 2 * beta * h ^n/ (h^n + (x-k)^n)))
   return(total)
 }
 
 #function for the fraction of T cells with x divisions at time t; f_t
-f <- function(x, t, beta){
-  #experimental parameters: delta = turn over rate (per day), C = initial number
-  # at t = 0  
-  delta = 0.0015; h = 50; n = 6; C = 0.0017; a = 1/(33.33 * 12); mu <- 9
-  d <- 1 - beta - delta
+#experimental parameters: delta = turn over rate (per day), C = initial number
+# at t = 0 
+f <- function(x, t, beta, delta=0.0015, h=50, n=6, C=0.0017, a=1/(33.33*12), mu=9){
+   d <- 1 - beta - delta
   #sum of f_0's
   total1 <- dpois(x, mu)*(1 + C / d * sum(sapply(0:x, 
          function(i) exp(-a * i) *  d^(- i)))) 
@@ -32,12 +30,6 @@ f <- function(x, t, beta){
   
     return(d^(t) * total2)
 }
-
-#simulating the distribution of cell divisions (0 - 100) at t = 25000 days, 
-#for beta = 0.0015,
-system.time(coll <- sapply(0:100,f,25000,0.0015))
-plot(1:length(coll[!is.na(coll)]),coll[!is.na(coll)]/sum(coll[!is.na(coll)]),
-     type = "l", xlab = "No. of cell divisions", ylab = "Probability")
 
 #Calculating aging 
 getPred <- function(t, beta){
@@ -55,29 +47,11 @@ residFun <- function(par, observed, yr){
   clusterExport(cl, c("f","mltpy", "getPred", "par", "t"))
   prdctns <- parSapply(cl, (yr - 20), FUN = getPred, par$beta)
   stopCluster(cl)
-  #prdctns <- sapply((t - 20), getPred, par$beta)
+ #prdctns <- sapply((t - 20), getPred, par$beta)
   resids <- log10(par$M * prdctns) - log10(observed)#par$M * prdctns - observed#
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
-#********************************** data load ********************************
-mydata <- read.csv("/home/buri/Documents/incidenceData.csv")
-incidenceData <- mydata[-(1:5),c(2,3)]
-incidenceData$Age <- seq(22,90,5)
-View(incidenceData)
-
-#********************************* data fitting ******************************
-
-inits <- list(beta = fit$par$beta, M = fit$par$M)
-fit <- nls.lm(par = inits, lower = c(0, 0), upper = c(0.001,1e23),
-                          fn = residFun, observed = incidenceData$Rate.per.100.000,
-                          t = incidenceData$Age,
-                          control = nls.lm.control(nprint=1))#,  ftol = 1e-4
-
-#It.    5, RSS =  0.0347676, Par. =  3.10975e-05  1.88351e+20
-
-prdctns <- sapply((incidenceData$Age - 20), getPred, fit$par$beta)
-plot(incidenceData$Age,prdctns*fit$par$M)
-
-plot(incidenceData$Age, log10(prdctns*fit$par$M))
-plot(incidenceData$Age, log10(incidenceData$Rate.per.100.000))
+inits <- list(beta =  3.10975e-05, M = 1.88351e+20)
+L <-  c(0, 0) 
+U = c(0.001,1e23)
