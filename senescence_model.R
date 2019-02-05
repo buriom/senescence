@@ -28,6 +28,13 @@ f <- function(x, t, beta, parms=prs) with(prs, {
     )))
   )
   
-    return(d^(t) * total2)
+    return(d^(t) * sumj_all)
 })
 
+model1_attributes <- list(model = f,
+                          inits = list(beta =  3.10975e-05, M = 1.88351e+20),
+                          L = c(0,0),
+                          U = c(0.001,1e23),
+                          defPars = prs)
+
+saveRDS(model1_attributes, "model1.rds")

@@ -6,7 +6,7 @@
 # $(...) your declared variables
 
 DATADIR ?= ~/cancerData
-
+#MODELDIR?= ~/senescenceModel
 ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
 ALLRDS := $(ALLSRCS:csv=rds)
 
@@ -20,5 +20,6 @@ test:
 %.rds: data_preprocessing.R $(DATADIR)/%.csv
 	Rscript $^ $@
 
+#%.rds fitting.R $(MODELDIR)/model%.Rds
 cleanrds:
 	rm $(ALLRDS)
