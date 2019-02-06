@@ -13,7 +13,7 @@ prs <- list(
   delta=0.0015, h=50, n=6, C=0.0017, a=1/(33.33*12), mu=9
 )
 
-f <- function(x, t, beta, parms=prs) with(prs, {
+f <- function(x, t, beta, parms=prs) with(parms, {
    d <- 1 - beta - delta
   #sum of f_0's
   sumj0 <- dpois(x, mu)*(
@@ -35,6 +35,8 @@ model1_attributes <- list(model = f,
                           inits = list(beta =  3.10975e-05, M = 1.88351e+20),
                           L = c(0,0),
                           U = c(0.001,1e23),
-                          defPars = prs)
+                          prs = prs)
 
-saveRDS(model1_attributes, "model1.rds")
+.args <- commandArgs(trailingOnly = TRUE)
+
+saveRDS(model1_attributes, tail(.args,1))

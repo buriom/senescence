@@ -10,7 +10,7 @@ df <- fread(.args[1], na.strings = "-")
 df <- df[,c("Age","Rate per 100,000")]
 df <- within(df, {
   Age <- gsub("<",   "0-",   Age)
-  Age <- gsub("\\+", "-100", Age)
+  Age <- gsub("\\+", "-90", Age)
 })
 
 #str_split_fixed(df$Age,"-",2)

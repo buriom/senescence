@@ -1,9 +1,9 @@
 library("minpack.lm")
 
 #******************************** Calculating aging ************************
-getPred <- function(t, mdl, beta){
+getPred <- function(t, mdl, beta, parms){
   #Predictions at time point t
-  coll <- sapply(0:100, mdl, t = t*365, beta)
+  coll <- sapply(0:100, mdl, t = t*365, beta, parms)
   #normalising
   f_t <- coll/sum(coll)
   #summing f_t >= h
@@ -11,27 +11,36 @@ getPred <- function(t, mdl, beta){
 }
 
 #********************************* Residual function ************************
-residFun <- function(par, mdl, observed, t, wghts){
+residFun <- function(par, mdl,  observed, t, wghts, parms){
   prdctns <- sapply(1:length(t), function(i) sum(wghts[[i]] * 
-  sapply(1:length(t[[i]]), function(j) getPred((t[[i]][j] - 20), mdl, par$beta))
+  sapply(1:length(t[[i]]), function(j) getPred((t[[i]][j] - 20), mdl, par$beta, parms))
                     )/(length(wghts[[i]])*sum(wghts[[i]])))   
   resids <- log10(par$M * prdctns) - log10(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
 #********************************* data fitting ******************************
-.args <- c("/home/buri/senescenceModel/model1.rds", 
-           "/home/buri/senescenceModel/lip.rds","fit1.rds")
-model <- readRDS(.args[1])
+.args <- c("/home/buri/senescenceModel/model_simple.rds", 
+           "/home/buri/senescenceModel/preProcessed/lip.rds","fit1.rds")
+
+.args <- commandArgs(trailingOnly = TRUE)
+
+#model <- readRDS(.args[1])
 incidenceData <- readRDS(.args[2])
-prs <- model$defPars
+#prs <- model$defPars
 tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub)
 wght <-  mapply(function(i,j) {things <- i:j; ifelse( things<50, 1, 4-0.04*(things))},
                  incidenceData$Age.lb, incidenceData$Age.ub)
 
-.args <- commandArgs(trailingOnly = TRUE)
+fit <- with(readRDS(.args[1]), {
+  nls.lm(par = inits, lower = L, upper = U,
+    fn = residFun, mdl = model, parms = prs, observed = incidenceData$`Rate per 100,000`,
+    t = tpts, wghts = wght)
+  })#, control = nls.lm.control(nprint=1)
 
-fit <- nls.lm(par = model$inits, lower = model$L, upper = model$U,
-              fn = residFun, mdl = model$model, observed = incidenceData$`Rate per 100,000`,
-              t = tpts, wghts = wght, control = nls.lm.control(nprint=1))
-saveRDS(fit$coeff, tail(.args,1))
+fit_results <- list(
+  fit = fit,
+  tpts = tpts,
+  wght = wght
+)
+saveRDS(fit_results, tail(.args,1))

@@ -1,25 +1,49 @@
+default: alldatasrcs
 
+test:
+	@echo $(FIGJPG)
 # $^ == all the dependencies
 # $@ == the target
 # within make $ means variable
 # $^, $@, etc special variables
 # $(...) your declared variables
 
-DATADIR ?= ~/cancerData
-#MODELDIR?= ~/senescenceModel
+#Data processing
+DATADIR ?= cancerData
+PROCESSEDIR ?= preProcessed
+FITSDIR ?= fits
+FIGDIR ?= figures
+
 ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
-ALLRDS := $(ALLSRCS:csv=rds)
+ALLRDS := $(addprefix $(PROCESSEDIR)/,$(ALLSRCS:csv=rds))
+FITSRDS := $(addprefix $(FITSDIR)/fit_simple_,$(ALLSRCS:csv=rds))
+FIGJPG := $(addprefix $(FIGDIR)/,$(ALLSRCS:csv=jpg))
 
-default: $(ALLRDS)
-
-.PHONY: test
-
-test:
-	@echo $(ALLRDS)
-
-%.rds: data_preprocessing.R $(DATADIR)/%.csv
+alldatasrcs: $(FIGJPG)
+	
+$(PROCESSEDIR):
+	mkdir $@
+ 
+$(PROCESSEDIR)/%.rds: data_preprocessing.R $(DATADIR)/%.csv | $(PROCESSEDIR)  
 	Rscript $^ $@
 
-#%.rds fitting.R $(MODELDIR)/model%.Rds
-cleanrds:
+
+#model specification
+model_%.rds: senescence_model_%.R 
+	Rscript $^ $@
+
+#model fitting
+$(FITSDIR):
+	mkdir $@
+	
+$(FITSDIR)/fit_simple_%.rds: fitting.R model_simple.rds $(PROCESSEDIR)/%.rds | $(FITSDIR)
+	Rscript $^ $@
+
+$(FIGDIR):
+	mkdir $@
+	
+$(FIGDIR)/%.jpg: plotting.R $(FITSDIR)/fit_simple_%.rds model_simple.rds $(PROCESSEDIR)/%.rds | $(FIGDIR)
+	Rscript $^ $@
+
+clean:
 	rm $(ALLRDS)
