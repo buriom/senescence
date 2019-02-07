@@ -7,13 +7,30 @@ test:
 # within make $ means variable
 # $^, $@, etc special variables
 # $(...) your declared variables
+# $^ == all the dependencies
+# $@ == the target
 
-#Data processing
+
+-include local.mk # optional way to define DATADIR, PROCESSEDIR, etc
+
+# project file structure
+DWNLDSDIR ?= cancerDownloads
 DATADIR ?= cancerData
 PROCESSEDIR ?= preProcessed
 FITSDIR ?= fits
 FIGDIR ?= figures
-DWNLDSDIR ?= cancerDownloads
+FIGFORMAT ?= jpg
+
+$(DWNLDSDIR) $(DATADIR) $(PROCESSEDIR) $(FITSDIR) $(FIGDIR):
+	mkdir $@
+
+
+# targets for obtaining raw data
+
+
+
+
+
 
 ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
 ALLDWNLDS := $(shell cd $(DWNLDSDIR); ls *.csv)
