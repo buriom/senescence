@@ -1,7 +1,7 @@
 default: alldatasrcs
 
 test:
-	@echo $(FIGJPG)
+	@echo $(ALLDWNLDS)
 # $^ == all the dependencies
 # $@ == the target
 # within make $ means variable
@@ -13,13 +13,19 @@ DATADIR ?= cancerData
 PROCESSEDIR ?= preProcessed
 FITSDIR ?= fits
 FIGDIR ?= figures
+DWNLDSDIR ?= cancerDownloads
 
 ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
+ALLDWNLDS := $(shell cd $(DWNLDSDIR); ls *.csv)
 ALLRDS := $(addprefix $(PROCESSEDIR)/,$(ALLSRCS:csv=rds))
 FITSRDS := $(addprefix $(FITSDIR)/fit_simple_,$(ALLSRCS:csv=rds))
 FIGJPG := $(addprefix $(FIGDIR)/,$(ALLSRCS:csv=jpg))
 
 alldatasrcs: $(FIGJPG)
+
+#extractData:
+#	for i in ALLDWNLDS; do 	cut -d "," -f 3-4  i | head -n 23 |tail -n 3+ > $(cut -d "," -f 1 i | head -n 1 .csv 
+
 	
 $(PROCESSEDIR):
 	mkdir $@
