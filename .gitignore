@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 *.rds
+*.jpg
+cancerData/*.csv
+cancerDownloads/*.csv
