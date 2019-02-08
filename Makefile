@@ -6,7 +6,8 @@ default: test
 
 test:
 	@echo '$(RDSNAMES)'
-# $^ == all the dependencies
+# $^ == the dependencies before '|'
+# $| == the dependencies after '\'
 # $@ == the target
 # within make $ means variable
 # $^, $@, etc special variables
@@ -18,7 +19,7 @@ test:
 -include local.mk # optional way to define DATADIR, PROCESSEDIR, etc
 
 # project file structure
-DWNLDSDIR := cancerDownloads
+DWNLDSDIR ?= cancerDownloads
 DATADIR ?= cancerData
 PROCESSEDIR ?= preProcessed
 FITSDIR ?= fits
@@ -38,25 +39,27 @@ DATAIDS ?= 34 50 76 500
 
 allrawdata: $(addsuffix _raw.csv,$(DATAIDS))
 
+# this means that make will look for these targets / dependencies in
+# these directories
 vpath %_raw.csv $(DWNLDSDIR)
 vpath %_proc.csv $(DATADIR)
-vpath %.rds $(PROCESSEDIR)
+vpath %_data.rds $(PROCESSEDIR)
 
 %_raw.csv: | $(DWNLDSDIR)
 	cd $|; wget -O $@ $(DATAURL)?site=$*&$(DATAQPARS)
 
+## COMPLICATED PAIRING OF NAME_proc.csv TO ID_raw.csv
 AVAILDLS := $(shell cd $(DWNLDSDIR); ls *_raw.csv)
-findname = $(shell head -n 1 $(DWNLDSDIR)/$(name) | sed -e 's/^[[:blank:]]*//' -e 's/[[:blank:]]*$$//' -e 's/^"//' -e 's/"$$//' -e 's/[^[:alpha:]]//g')
-
-PROCNAMES := $(foreach name,$(AVAILDLS),$(findname)_proc.csv)
+findname = $(shell head -n 1 $(DWNLDSDIR)/$(id) | sed -e 's/^[[:blank:]]*//' -e 's/[[:blank:]]*$$//' -e 's/^"//' -e 's/"$$//' -e 's/[^[:alpha:]]//g')
+PROCNAMES := $(foreach id,$(AVAILDLS),$(findname)_proc.csv)
+PAIRS := $(join $(PROCNAMES),$(patsubst %,^%,$(AVAILDLS)))
 
 define NAME_template
-$(subst ^,: ,$(pr)) | $(DATADIR)
-	tail -n +4 $$^ | tail -r | tail -n +15 | tail -r > $$|/$$@
+$(subst ^,: ,$(pr)) | $(DATADIR) # this specifies NAME_proc.csv: ID_raw.csv | DATADIR
+	tail -n +4 $$^ | tail -r | tail -n +15 | tail -r | csvtool -t , col 1-7 - > $$|/$$@
 
 endef
 
-PAIRS := $(join $(PROCNAMES),$(patsubst %,^%,$(AVAILDLS)))
 $(foreach pr,$(PAIRS),$(eval $(NAME_template))) #$(subst ^,$(comma),$(pr)))
 
 allprocdata: $(PROCNAMES) 
@@ -65,8 +68,17 @@ RDSNAMES := $(PROCNAMES:_proc.csv=_data.rds)
 
 allrdsreads: $(RDSNAMES)
 
-%_data.rds: %_proc.csv | $(PROCESSEDIR)
-	@echo '$|/$@ from $^'
+%_data.rds: data_preprocessing.R %_proc.csv | $(PROCESSEDIR)
+	Rscript $^ $|/$@
+
+cleandl:
+	rm -rf $(DWNLDSDIR)
+
+cleanproc:
+	rm -rf $(DATADIR)
+
+cleanrds:
+	rm -rf $(PROCESSEDIR)
 
 # ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
 # ALLDWNLDS := $(shell cd $(DWNLDSDIR); ls *.csv)
