@@ -10,7 +10,7 @@
 
 # Default parameters
 prs <- list(
-  delta=0.0015, h=50, n=6, C=0.0017, a=1/(33.33*12), mu=9
+  delta=0.0015, h=50, n=6, C=0.0017, a=1/(33.33*365), mu=9
 )
 
 f <- function(x, t, beta, parms=prs) with(parms, {
@@ -32,9 +32,9 @@ f <- function(x, t, beta, parms=prs) with(parms, {
 })
 
 model1_attributes <- list(model = f,
-                          inits = list(beta =  3.10975e-05, M = 1.88351e+20),
+                          inits = list(beta =  3.10975e-03, M = 1.88351e0),
                           L = c(0,0),
-                          U = c(0.001,1e23),
+                          U = c(1,1e23),
                           prs = prs)
 
 .args <- commandArgs(trailingOnly = TRUE)
