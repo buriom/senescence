@@ -5,7 +5,7 @@ space := $(empty) $(empty)
 default: test
 
 test:
-	@echo '$(RDSNAMES)'
+	@echo '$(FIGNAMES)'
 # $^ == the dependencies before '|'
 # $| == the dependencies after '|'
 # $@ == the target
@@ -22,13 +22,15 @@ test:
 DWNLDSDIR ?= cancerDownloads
 DATADIR ?= cancerData
 PROCESSEDIR ?= preProcessed
-FITSDIR ?= fits
-FIGDIR ?= figures
+#FITSDIR ?= fits
+#FIGDIR ?= figures
 FIGFORMAT ?= jpg
+FIG1DIR ?= figures/model1Figs
+FIG2DIR ?= figures/model2Figs
+FIG3DIR ?= figures/model3Figs
 
-$(DWNLDSDIR) $(DATADIR) $(PROCESSEDIR) $(FITSDIR) $(FIGDIR):
+$(DWNLDSDIR) $(DATADIR) $(PROCESSEDIR) $(FIG1DIR) $(FIG2DIR) $(FIG31DIR):
 	mkdir $@
-
 
 # targets for obtaining raw data
 
@@ -69,9 +71,31 @@ RDSNAMES := $(PROCNAMES:_proc.csv=_data.rds)
 
 allrdsreads: $(RDSNAMES)
 
+
 %_data.rds: dataPreprocessing.R %_proc.csv | $(PROCESSEDIR)
 	Rscript $^ $|/$@
 
+#plotting figures
+ALLSRCS := $(shell cd $(DATADIR); ls *_proc.csv)
+FIG1JPG := $(addprefix $(FIG1DIR)/,$(ALLSRCS:_proc.csv=.jpg))
+FIG2JPG := $(addprefix $(FIG2DIR)/,$(ALLSRCS:_proc.csv=.jpg))
+FIG3JPG := $(addprefix $(FIG3DIR)/,$(ALLSRCS:_proc.csv=.jpg))
+
+FIGNAMES := $(FIG1JPG) $(FIG2JPG) $(FIG3JPG)
+
+allfigs: $(FIGNAMES)
+#	@echo $(FIG1DIR)
+
+$(FIG1DIR)/%.jpg: model1.R $(PROCESSEDIR)/%_data.rds | $(FIG1DIR)
+	Rscript $^ $@
+
+$(FIG2DIR)/%.jpg: model2.R $(PROCESSEDIR)/%_data.rds | $(FIG2DIR)
+	Rscript $^ $@
+
+$(FIG3DIR)/%.jpg: model3.R $(PROCESSEDIR)/%_data.rds | $(FIG3DIR)
+	Rscript $^ $@
+	
+#cleaning
 cleandl:
 	rm -rf $(DWNLDSDIR)
 
@@ -81,6 +105,14 @@ cleanproc:
 cleanrds:
 	rm -rf $(PROCESSEDIR)
 
+cleanfig1:
+	rm -rf $(FIG1DIR)
+	
+cleanfig2:
+	rm -rf $(FIG2DIR)
+	
+cleanfig3:
+	rm -rf $(FIG3DIR)
 # ALLSRCS := $(shell cd $(DATADIR); ls *.csv)
 # ALLDWNLDS := $(shell cd $(DWNLDSDIR); ls *.csv)
 # ALLRDS := $(addprefix $(PROCESSEDIR)/,$(ALLSRCS:csv=rds))
