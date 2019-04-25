@@ -7,7 +7,7 @@ default: test
 test:
 	@echo '$(RDSNAMES)'
 # $^ == the dependencies before '|'
-# $| == the dependencies after '\'
+# $| == the dependencies after '|'
 # $@ == the target
 # within make $ means variable
 # $^, $@, etc special variables
@@ -34,8 +34,8 @@ $(DWNLDSDIR) $(DATADIR) $(PROCESSEDIR) $(FITSDIR) $(FIGDIR):
 
 DATAURL := https://seer.cancer.gov/explorer/download_data.php
 DATAQPARS := data_type=1&graph_type=3&compareBy=race&chk_sex_1=1&chk_race_1=1&hdn_data_type=1&advopt_precision=1&showDataFor=sex_1
-DATAIDS ?= 34 50 76 500
-# DATAIDS ?= 34 50 76 500 55 57 402 20 21 31 58 16 17 75 56 8 38 9 83 110 72 46 90 91 92 93 95 96 97 100 418 5 35 47 53 111 409 89 86 3 12 61 40 66 7 19 51 18 67 80 6 71 62 63
+#DATAIDS ?= 34 50 76 500
+DATAIDS ?= 34 50 76 500 55 57 402 20 21 31 58 16 17 75 56 8 38 9 83 110 72 46 90 91 92 93 95 96 97 100 418 5 35 47 53 111 409 89 86 3 12 61 40 66 7 19 51 18 67 80 6 71 62 63
 
 allrawdata: $(addsuffix _raw.csv,$(DATAIDS))
 
@@ -54,9 +54,10 @@ findname = $(shell head -n 1 $(DWNLDSDIR)/$(id) | sed -e 's/^[[:blank:]]*//' -e 
 PROCNAMES := $(foreach id,$(AVAILDLS),$(findname)_proc.csv)
 PAIRS := $(join $(PROCNAMES),$(patsubst %,^%,$(AVAILDLS)))
 
+#I Substituted tail -r with tac
 define NAME_template
 $(subst ^,: ,$(pr)) | $(DATADIR) # this specifies NAME_proc.csv: ID_raw.csv | DATADIR
-	tail -n +4 $$^ | tail -r | tail -n +15 | tail -r | csvtool -t , col 1-7 - > $$|/$$@
+	tail -n +4 $$^ | tac | tail -n +15 | tac | csvtool -t , col 1-7 - > $$|/$$@
 
 endef
 
@@ -68,7 +69,7 @@ RDSNAMES := $(PROCNAMES:_proc.csv=_data.rds)
 
 allrdsreads: $(RDSNAMES)
 
-%_data.rds: data_preprocessing.R %_proc.csv | $(PROCESSEDIR)
+%_data.rds: dataPreprocessing.R %_proc.csv | $(PROCESSEDIR)
 	Rscript $^ $|/$@
 
 cleandl:
@@ -95,7 +96,7 @@ cleanrds:
 # $(PROCESSEDIR):
 # 	mkdir $@
 # 
-# $(PROCESSEDIR)/%.rds: data_preprocessing.R $(DATADIR)/%.csv | $(PROCESSEDIR)  
+# $(PROCESSEDIR)/%.rds: dataPreprocessing.R $(DATADIR)/%.csv | $(PROCESSEDIR)  
 # 	Rscript $^ $@
 # 
 # 
