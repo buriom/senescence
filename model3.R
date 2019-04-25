@@ -21,11 +21,10 @@ f <- function(x, t, tau, mu, beta, fxdParms=prs) with(fxdParms, {
   #sum of f_0's
   sumj0 <- dpois(x, mu) + tau / d *dpois(x, mu)* sum((d*exp(a))^(0:x))
   #  coeffs <- d^(-(1:x))
-  sumj_all <- sumj0+sum(sapply(1:x,function(j) d^(-j)*prod(2*beta*(h^n)/(h^n + 
-                        (x - (1:j))^n))*(choose(t,j) * dpois(x - j, mu) +  
-                        tau/d*dpois(x - j, mu)*sum((d*exp(a))^-(0:(x - j))*
-                                                     choose(x - 0:(x - j), j)
-                                   )))
+  sumj_all <- sumj0+sum(sapply(1:x,function(j) 
+    d^(-j)*prod(2*beta*(h^n)/(h^n+(x-(1:j))^n))*
+      (choose(t,j)*dpois(x - j, mu) + tau/d*dpois(x - j, mu)*
+         sum((d*exp(a))^-(0:(x - j))* choose(x - 0:(x - j), j))))
   )
   return(d^(t) * sumj_all)
 })
@@ -34,14 +33,16 @@ f <- function(x, t, tau, mu, beta, fxdParms=prs) with(fxdParms, {
 prdct <- function(mdl, t, parms, fxdParms){
   prb <- dpois(0:100,parms$mu)
   mylist1 <- list()
-  for (i in 1:nrow(t)){
+  for (i in 1:length(t)){
     mylist2 <- c()
-    for(j in 1:ncol(t)){
+    for(j in 1:length(t[[i]])){
       #updating beta at each time step, i.e after a year
-      beta <- (fxdParms$delta - parms$tau * exp(-fxdParms$a*t[i,j]))/(1 - 2 * 
-        sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + fxdParms$h^fxdParms$n)) * prb))
+      beta <- (fxdParms$delta-parms$tau*exp(-fxdParms$a*(t[[i]][j] - 20)*365))/
+        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
+                                            fxdParms$h^fxdParms$n)) * prb))
       #calculating the propotions for all 0...100 cell divisions 
-      prb <- sapply(0:100, mdl, t = t[i,j], parms$tau, parms$mu, beta, fxdParms)
+      prb <- sapply(0:100, mdl, t = (t[[i]][j] - 20)*365, parms$tau, parms$mu,
+                    beta, fxdParms)
       #calculation immunoscence predictor by normalising the propotions from above
       mylist2[j] <- sum((prb/sum(prb))[50:100])
     }
@@ -51,23 +52,24 @@ prdct <- function(mdl, t, parms, fxdParms){
 }
 
 #test
-#system.time(b <- prdct(f, t(tpts),  inits, prs))
+system.time(b <- prdct(f, tpts,  inits, prs))
 #b
 
 bestPrdctns <- function(mdl, t, parms, fxdParms){
   prb <- dpois(0:100,parms$mu)
   propnsList <- list()
   betaList <- list()
-  for (i in 1:nrow(t)){
+  for (i in 1:length(t)){
     mylist2 <- c()
     mylist3 <- c()
-    for(j in 1:ncol(t)){
-      beta <- (fxdParms$delta - parms$tau * exp(-fxdParms$a*t[i,j]))/
+    for(j in 1:length(t[[i]])){
+      beta <- (fxdParms$delta - parms$tau*exp(-fxdParms$a*(t[[i]][j]-20)*365))/
         (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
-        fxdParms$h^fxdParms$n)) * prb))
+                                            fxdParms$h^fxdParms$n)) * prb))
       mylist3[j] <- beta
       #calculating the propotions for all 0...100 cell divisions 
-      prb <- sapply(0:100, mdl, t = t[i,j], parms$tau, parms$mu, beta, fxdParms)
+      prb <- sapply(0:100, mdl, t = (t[[i]][j] - 20)*365, parms$tau, parms$mu,
+                    beta, fxdParms)
       mylist2[j] <- sum((prb/sum(prb))[50:100])
     }
     propnsList[[i]] <- mylist2 
@@ -80,45 +82,43 @@ bestPrdctns <- function(mdl, t, parms, fxdParms){
 #calculating the disparity between predictions and observed data
 residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
   unWghtdPreds <-  prdct(mdl, t, par, fxdParms)
-  unWghtdMat <- sapply(unWghtdPreds, function(x) as.numeric(unlist(x)))
-  WgtdMat <- unWghtdMat*wghts
-  prdctns <- sapply(1:ncol(WgtdMat),function(i) sum(WgtdMat[,i])/sum(wghts[,i]))
+  prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wghts)
   resids <- log10(prdctns) - log10(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
 #Read in data and extract timepoints and weights
-datafile <- "preProcessed/LipCancer_data.rds"
+datafile <- "/home/buri/Downloads/StomachCancer_data.rds"
 incidenceData <- readRDS(datafile)
 incidenceData[nrow(incidenceData),2] <- 89#to make ub for last class = 89
-hk <- head(seq(0,5,1),-1)
-#extract timepoints
-tpts <-  t(sapply(incidenceData$Age.lb, function(i) hk + (i-20))*365)
-#extract weight
-wght <-  mapply(function(i,j) {things <- i:j; ifelse( things<50, 1, 4.18-0.04*
-                      (things))}, incidenceData$Age.lb, incidenceData$Age.ub)
+tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub,
+                SIMPLIFY = FALSE)
+#extract weight: 4.18 and 0.04 obtained from 
+#https://www.census.gov/prod/cen2010/briefs/c2010br-03.pdf
+wght <-  mapply(function(i,j) {things <- i:j; ifelse( 
+  things<50, 1, 4.18-0.04*(things))},incidenceData$Age.lb, incidenceData$Age.ub,
+  SIMPLIFY = FALSE)
+
 
 #initial values for fitting
 inits <- list(mu=44.48019, tau=0.003697389); a <- c(0,0); b <- c(100,1)
 
+obs <- incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`)
 #fitting after normalising
 fit <- nls.lm(par = inits, lower = a, upper = b,
-              fn = residFun, mdl = f, fxdParms = prs, observed = 
-              incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`),
+              fn = residFun, mdl = f, fxdParms = prs, observed = obs,
               t = tpts, wghts = wght, control = nls.lm.control(nprint=1,
                                                                ftol = 1e-4))
 
 #predictions using the fitted values
 unWghtdPreds <-  bestPrdctns(f, tpts, fit$par, prs)[[1]]
-unWghtdMat <- sapply(unWghtdPreds, function(x) as.numeric(unlist(x)))
-WgtdMat <- unWghtdMat*wght
-prdctns <- sapply(1:ncol(WgtdMat),function(i) sum(WgtdMat[,i])/sum(wght[,i]))
+prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
 #plotting
 age <- incidenceData$Age.ub
-obs <- log10(incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`))
+logObs <- log10(obs)
 preds <- log10(prdctns)
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", datafile)
-plot(age, obs,  col = "blue",
+cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+plot(age, logObs,  col = "blue",
      xlab = "Age", ylab = bquote('log'[10]*' Incidence'), main =
        bquote(paste(.(cancer) ," data with ",tau," fitted")))
 lines(age, preds)

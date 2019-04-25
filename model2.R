@@ -25,52 +25,58 @@ f <- function(x, t, beta, mu, tau, parms=prs) with(parms, {
 })
 
 #calculating the immunoscence predictor
-getPred <- function(t, mdl, beta,mu,tau, parms){
-  #Predictions at time point t
-  coll <- sapply(0:100, mdl, t = t*365, beta,mu,tau, parms)
-  #normalising
-  f_t <- coll/sum(coll)
-  #summing f_t >= h
-  return(sum(f_t[50:100]))
+getPred <- function(mdl,t, parms, fxdParms){
+  prdctns <- sapply(1:length(t), function(i) {
+    sapply(1:length(t[[i]]), function(j) {
+      coll <- sapply(0:100, mdl, t = (t[[i]][j]-20)*365, parms$beta,parms$mu,
+                     parms$tau, fxdParms)
+      #normalising
+      f_t <- coll/sum(coll)
+      sum(f_t[50:100])})}, simplify = FALSE)
 }
 
 #calculating the disparity between predictions and observed data
-residFun <- function(par, mdl,  observed, t, wghts, parms){
-  prdctns <- sapply(1:length(t), function(i) sum(wghts[[i]] * 
-  sapply(1:length(t[[i]]), function(j) getPred((t[[i]][j] - 20), mdl, 
-  par$beta, par$mu, par$tau, parms))
-  )/sum(wghts[[i]]))   
+residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
+  unWghtdPreds <- getPred(mdl, t, par, fxdParms)
+  prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wghts)
   resids <- log10(prdctns) - log10(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
+#********************************* data fitting ******************************
+.args <- c("preProcessed/StomachCancer_data.rds")
+
+.args <- commandArgs(trailingOnly = TRUE)
+
 #load the data and calculate the population weights in each class
-datafile <-  "preProcessed/ColonandRectumCancer_data.rds"
-incidenceData <- readRDS(datafile)
-#incidenceData[14,2] <- 100
-tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub)
-# 4.18 and 0.04 obtained from https://www.census.gov/prod/cen2010/briefs/c2010br-03.pdf
-wght <-  mapply(function(i,j) {things <- i:j; ifelse( things<50, 1, 
-                4.18-0.04*(things))}, incidenceData$Age.lb, incidenceData$Age.ub)
+incidenceData <- readRDS(.args[1])
+#incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
+#incidenceData[dim(incidenceData)[1],2] <- 100
+tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub, 
+                SIMPLIFY = FALSE)
+#extract weight: 4.18 and 0.04 obtained from 
+#https://www.census.gov/prod/cen2010/briefs/c2010br-03.pdf
+wght <-  mapply(function(i,j) {things <- i:j; ifelse( 
+  things<50, 1, 4.18-0.04*(things))},incidenceData$Age.lb, incidenceData$Age.ub, 
+  SIMPLIFY = FALSE)
 
 #initial values for fitting
 inits <- list(beta=0.0005560091,mu=39.218,tau=246);a<-c(0,0,0);b<-c(1,100,10000)
 
+obs <- incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`)
 #fitting after normalising
-fit <- nls.lm(par = inits, lower = a, upper = b,fn = residFun,mdl=f,parms = prs, 
-              observed = incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`),
-              t = tpts, wghts = wght, control = nls.lm.control(nprint=1,  ftol = 1e-4))
-
+fit <- nls.lm(par = inits, lower = a, upper = b,
+              fn = residFun, mdl = f, fxdParms = prs,observed = obs,t = tpts,
+              wghts = wght, control = nls.lm.control(nprint=1,  ftol = 1e-4))
 #predictions using the fitted values
-prdctns <- sapply(1:length(tpts), function(i) sum(wght[[i]] * sapply(1:length(tpts[[i]]),
-                  function(j) getPred((tpts[[i]][j] - 20), f, fit$par$beta,
-                    fit$par$mu,fit$par$tau, prs)))/sum(wght[[i]])) 
+unWghtdPreds <- getPred(f, tpts, fit$par, prs)
+prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
 #plotting
 age <- incidenceData$Age.ub
-obs <- log10(incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`))
+logObs <- log10(obs)
 preds <- log10(prdctns)
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", datafile)
-plot(age, obs,  col = "blue",
+cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+plot(age, logObs,  col = "blue",
      xlab = "Age", ylab = bquote('log'[10]*' Incidence'), 
      main = bquote(paste(.(cancer) ," data with ",tau," fitted")))
 lines(age, preds)
