@@ -18,7 +18,7 @@ prs <- list(
   delta = 0.0015, h=50, n=1, a=1/(33.33 *365)
 )
 
-#propotion of the T cell population with x no. of divisions at time t
+#proportion of the T cell population with x no. of divisions at time t
 f <- function(x, t, beta, mu, tau, parms=prs) with(parms, {
   d <- 1 - beta - delta
   #sum of f_0's
@@ -85,6 +85,7 @@ prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
 
 #**********************************plotting****************************************
 cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+saveRDS(fit, paste0("fits/model2fits/",cancer,".rds")[1])
 
 jpeg(paste0('figures/model2Figs/', cancer,'.jpg'))
 
@@ -96,7 +97,7 @@ plot(age, logObs,  col = "blue",
      main = bquote(bold(paste(.(cancer) ," with ",tau," fitted"))))
 lines(age, preds)
 #Calculating R^2
-Rsquare <- cor(obs,preds); Rsquare^2
+Rsquare <- cor(logObs,preds); Rsquare^2
 
 #Calculating the AIC
 logL <- function(object, REML = FALSE, ...) { 

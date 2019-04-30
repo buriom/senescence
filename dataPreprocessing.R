@@ -1,14 +1,27 @@
 library(data.table)
 
-.args <- c("cancerData/BonesandJointsCancer_proc.csv", "BonesandJointsCancer_data.rds")
+.args <- c("cancerData/VulvaCancer_proc.csv", "VulvaCancer_data.rds")
 .args <- commandArgs(trailingOnly = TRUE)
 
 
 #********************************** data load ********************************
 df <- fread(.args[1], na.strings = "-")
 
-df <- df[Sex == "Both Sexes" & `Race/Ethnicity` == "All Races (includes Hispanic)" & Age != "All Ages"]
-
+gender <- function(x){
+  if(x %in% c("ProstateCancer","TestisCancer")){
+    gender <- "Male"
+  }else if(x %in% c(
+    "BreastCancer","CervixUteriCancer", "CervixUteriCancer", "CorpusandUterusNOSCancer",
+    "FemalegenitalsystemCancer", "OvaryCancer", "VaginaCancer", "VulvaCancer")){
+    gender <- "Female"
+  }
+  else{
+    gender <- "Both Sexes"
+  }
+}
+df <- df[Sex == gender(gsub(".*cancerData/\\s*|_proc.csv*", "", .args[1])) &
+           `Race/Ethnicity` == "All Races (includes Hispanic)" & 
+           Age != "All Ages"]
 # df <- df[,.SD,.SDcols=c("Age", "Year", grep("per 100,000", colnames(df), value = T)) ]
 # setnames(df, c("Age","Year","Rate per 100,000"))
 # I deleted the year column

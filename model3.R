@@ -1,6 +1,6 @@
 #*******************************************************************************
-#In this implementation, I consider a time varying beta, B_t and fit 2 parameters
-#, i.e   mu and tau
+#In this implementation, I consider a time varying beta, i.e B_t, and fit 3 parameters
+#, i.e   mu, delta and tau
 #*******************************************************************************
 library("minpack.lm")
 
@@ -16,11 +16,11 @@ library("minpack.lm")
 
 #list of fixed parameters from literature
 prs <- list(
-  delta = 0.0015, h=50, n=1, a=1/(33.33*365)
+  h=50, n=1, a=1/(33.33*365)#delta = 0.001, 
 )
 
-#propotion of the T cell population with x no. of divisions at time t
-f <- function(x, t, tau, mu, beta, fxdParms=prs) with(fxdParms, {
+#proportion of the T cell population with x no. of divisions at time t
+f <- function(x, t, tau, mu, beta, delta, fxdParms=prs) with(fxdParms, {
   d <- 1 - beta - delta
   #sum of f_0's
   sumj0 <- dpois(x, mu) + tau / d *dpois(x, mu)* sum((d*exp(a))^(0:x))
@@ -34,20 +34,21 @@ f <- function(x, t, tau, mu, beta, fxdParms=prs) with(fxdParms, {
 })
 
 #*****Calculating aging whilst updating B_t at each time step (1 yr steps) *****
-prdct <- function(mdl, t, parms, fxdParms){
+getPred <- function(mdl, t, parms, fxdParms){
   diffrce <- (20+(14-length(t))*5)
-  prb <- dpois(0:100,parms$mu)
+  beta <- parms$delta
+  #prb <- dpois(0:100,parms$mu)
   mylist1 <- list()
   for (i in 1:length(t)){
     mylist2 <- c()
     for(j in 1:length(t[[i]])){
-      #updating beta at each time step, i.e after a year
-      beta <- (fxdParms$delta-parms$tau*exp(-fxdParms$a*(t[[i]][j] -   diffrce )*365))/
-        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
-                                            fxdParms$h^fxdParms$n)) * prb))
       #calculating the propotions for all 0...100 cell divisions 
       prb <- sapply(0:100, mdl, t = (t[[i]][j] -   diffrce )*365, parms$tau, parms$mu,
-                    beta, fxdParms)
+                    beta, parms$delta, fxdParms)
+      #updating beta at each time step, i.e after a year
+      beta <- (parms$delta-parms$tau*exp(-fxdParms$a*(t[[i]][j] -   diffrce )*365))/
+        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
+                                            fxdParms$h^fxdParms$n)) * prb))
       #calculation immunoscence predictor by normalising the propotions from above
       mylist2[j] <- sum((prb/sum(prb))[50:100])
     }
@@ -57,25 +58,26 @@ prdct <- function(mdl, t, parms, fxdParms){
 }
 
 #test
-#system.time(b <- prdct(f, tpts,  inits, prs))
+#system.time(b <- getPred(f, tpts,  inits, prs))
 #b
 
 bestPrdctns <- function(mdl, t, parms, fxdParms){
   diffrce <- (20+(14-length(t))*5)
-  prb <- dpois(0:100,parms$mu)
+  #prb <- dpois(0:100,parms$mu)
+  beta <- parms$delta
   propnsList <- list()
   betaList <- list()
   for (i in 1:length(t)){
     mylist2 <- c()
     mylist3 <- c()
     for(j in 1:length(t[[i]])){
-      beta <- (fxdParms$delta - parms$tau*exp(-fxdParms$a*(t[[i]][j]-  diffrce )*365))/
-        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
-                                            fxdParms$h^fxdParms$n)) * prb))
       mylist3[j] <- beta
       #calculating the propotions for all 0...100 cell divisions 
       prb <- sapply(0:100, mdl, t = (t[[i]][j] -   diffrce )*365, parms$tau, parms$mu,
-                    beta, fxdParms)
+                    beta, parms$delta, fxdParms)
+      beta <- (parms$delta - parms$tau*exp(-fxdParms$a*(t[[i]][j]-  diffrce )*365))/
+        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
+                                            fxdParms$h^fxdParms$n)) * prb))
       mylist2[j] <- sum((prb/sum(prb))[50:100])
     }
     propnsList[[i]] <- mylist2 
@@ -86,20 +88,20 @@ bestPrdctns <- function(mdl, t, parms, fxdParms){
 
 #calculating the disparity between predictions and observed data
 residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
-  unWghtdPreds <-  prdct(mdl, t, par, fxdParms)
+  unWghtdPreds <-  getPred(mdl, t, par, fxdParms)
   prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wghts)
   resids <- log10(prdctns) - log10(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
 #********************************* data fitting ******************************
-.args <- c("preProcessed/LipCancer_data.rds")
+.args <- c("preProcessed/MyeloidandMonocyticLeukemia_data.rds","fits/model3fits/MyeloidandMonocyticLeukemia.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
 #Read in data and extract timepoints and weights
-incidenceData <- readRDS(.args)
-#incidenceData[nrow(incidenceData),2] <- 89#to make ub for last class = 89
+incidenceData <- readRDS(.args[1])
+
 tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub,
                 SIMPLIFY = FALSE)
 #extract weight: 4.18 and 0.04 obtained from 
@@ -110,7 +112,7 @@ wght <-  mapply(function(i,j) {things <- i:j; ifelse(
 
 
 #initial values for fitting
-inits <- list(mu=44.48019, tau=0.003697389); a <- c(0,0); b <- c(100,1)
+inits <- list(mu=34.5194, tau=0.000562692, delta = 0.00161717); a <- c(0,0.0005,0.0005); b <- c(100,1, 1)
 
 obs <- incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`)
 #fitting after normalising
@@ -120,11 +122,14 @@ fit <- nls.lm(par = inits, lower = a, upper = b,
                                                                ftol = 1e-4))
 
 #predictions using the fitted values
-unWghtdPreds <-  bestPrdctns(f, tpts, fit$par, prs)[[1]]
-prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
+unWghtdPreds <-  bestPrdctns(f, tpts, fit$par, prs)
+prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds[[1]],wght)
 
 #**********************************plotting****************************************
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args[1])
+
+#remember to change this to just fit
+saveRDS(fit$par, paste0("fits/model3fits/",cancer,".rds")[1])
 
 jpeg(paste0('figures/model3Figs/', cancer,'.jpg'))
 age <- incidenceData$Age.ub
@@ -135,7 +140,7 @@ plot(age, logObs,  col = "blue",
        bquote(bold(paste(.(cancer) ," with ",beta[t]))))
 lines(age, preds)
 #Calculating R^2
-Rsquare <- cor(obs,preds); Rsquare^2
+Rsquare <- cor(logObs,preds); Rsquare^2
 
 #function for calculating the AIC
 logL <- function(object, REML = FALSE, ...) { 
@@ -169,17 +174,12 @@ space <- (vertSpan[2]-vertSpan[1])/15
 #paste("Mean =", round(MyMean, 1), "\nMedian =", round(MyMedian, 1), "\nStd.Dev =", round(MySd, 1)), pos = 4)
 
 text(70, (least ), cex = 1.2, bquote(paste(tau, '=' , .(round(fit$par$tau,6)))))
-text(70, (least + 1.2*space), cex = 1.2, bquote(paste(mu, '=' , .(round(fit$par$mu,4)))))
-text(70, (least + 2*space), cex = 1.2, expression(bold('Parameters')))
-text(70, (least + 3*space), cex = 1.2, bquote(paste('RSS=' , .(round(fit$deviance,6)))))
-text(70, (least + 4*space), cex = 1.2, bquote(paste('R'^2*' = ', .(round(Rsquare^2,5)))))
-text(70, (least + 5*space), cex = 1.2, bquote(paste('AIC = ', .(round(perfom,4)))))
-text(70, (least + 6*space), cex = 1.2, expression(bold('Performance')))
+text(70, (least + 1*space), cex = 1.2, bquote(paste(mu, '=' , .(round(fit$par$mu,4)))))
+text(70, (least + 2*space), cex = 1.2, bquote(paste(delta, '=' , .(round(fit$par$delta,4)))))
+text(70, (least + 3*space), cex = 1.2, expression(bold('Parameters')))
+text(70, (least + 4*space), cex = 1.2, bquote(paste('RSS=' , .(round(fit$deviance,6)))))
+text(70, (least + 5*space), cex = 1.2, bquote(paste('R'^2*' = ', .(round(Rsquare^2,5)))))
+text(70, (least + 6*space), cex = 1.2, bquote(paste('AIC = ', .(round(perfom,4)))))
+text(70, (least + 7*space), cex = 1.2, expression(bold('Performance')))
 
 dev.off()
-# fit_results <- list(
-#   fit = fit,
-#   tpts = tpts,
-#   wght = wght
-# )
-# saveRDS(fit_results, paste0("fits/model3fits/",cancer,".rds"))

@@ -17,7 +17,7 @@ prs <- list(
   delta = 0.0015, h=50, n=1, tau=0.0017, a=1/(33.33 *365)#fixed paramaters
 )
 
-#propotion of the T cell population with x no. of divisions at time t
+#proportion of the T cell population with x no. of divisions at time t
 f <- function(x, t, beta, mu, parms=prs) with(parms, {
   d <- 1 - beta - delta
   #sum of f_0's
@@ -52,7 +52,7 @@ residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
 }
 
 #********************************* data fitting ******************************
-.args <- c("preProcessed/LipCancer_data.rds")
+.args <- c("preProcessed/BreastCancer_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
@@ -90,6 +90,7 @@ prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
 # )
 cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
 
+saveRDS(fit, paste0("fits/model1fits/",cancer,".rds")[1])
 
 #function to Calculate the AIC
 logL <- function(object, REML = FALSE, ...) { 
@@ -125,7 +126,7 @@ plot(age, logObs,  col = "blue",
 lines(age, preds)
 
 #Calculating R^2
-Rsquare <- cor(obs,preds); Rsquare^2
+Rsquare <- cor(logObs,preds); Rsquare^2
 
 perfom <- 2 * (length(fit$par) + 1) - 2 * logL(fit)
 
