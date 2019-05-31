@@ -35,71 +35,47 @@ f <- function(x, t, beta, mu, tau, parms=prs) with(parms, {
 
 #calculating the immunoscence predictor
 getPred <- function(mdl,t, parms, fxdParms){
-  diffrce <- (20+(14-length(t))*5)
+  t <- (t-min(t))*365
   prdctns <- sapply(1:length(t), function(i) {
-    sapply(1:length(t[[i]]), function(j) {
-      coll <- sapply(0:100, mdl, t = (t[[i]][j]-diffrce)*365, parms$beta,parms$mu,
-                     parms$tau, fxdParms)
-      #normalising
-      f_t <- coll/sum(coll)
-      sum(f_t[50:100])})}, simplify = FALSE)
+    coll <- sapply(0:100, mdl, t = t[i], parms$beta,parms$mu,parms$tau, 
+                   fxdParms)
+    #normalising
+    f_t <- coll/sum(coll)
+    sum(f_t[50:100])}, simplify = TRUE)
 }
 
 #calculating the disparity between predictions and observed data
-residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
-  unWghtdPreds <- getPred(mdl, t, par, fxdParms)
-  prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wghts)
-  resids <- log10(prdctns) - log10(observed)
+residFun <- function(par, mdl,  observed, t, fxdParms){
+  prdctns <- getPred(mdl, t, par, fxdParms)
+  resids <- log(prdctns) - log(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
 #********************************* data fitting ******************************
-.args <- c("preProcessed/LipCancer_data.rds")
+.args <- c("preProcessed/Breast_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
 #load the data and calculate the population weights in each class
-incidenceData <- readRDS(.args[1])
-#incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
-#incidenceData[dim(incidenceData)[1],2] <- 100
-tpts <-  mapply(function(i,j) i:j, incidenceData$Age.lb, incidenceData$Age.ub, 
-                SIMPLIFY = FALSE)
-#extract weight: 4.18 and 0.04 obtained from 
-#https://www.census.gov/prod/cen2010/briefs/c2010br-03.pdf
-wght <-  mapply(function(i,j) {things <- i:j; ifelse( 
-  things<50, 1, 4.18-0.04*(things))},incidenceData$Age.lb, incidenceData$Age.ub, 
-  SIMPLIFY = FALSE)
+FittedData <- readRDS(.args[1])
+
+cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
 
 #initial values for fitting
-inits <- list(beta=0.00106927,mu=34.9594,tau=0.201008);a<-c(0,0,0);b<-c(1,100,10000)
+inits <- list(beta=0.00245,mu=42.5607,tau=0.0017);a<-c(0,0,0.00005);b<-c(1,100,0.1)
+inits$beta <- readRDS(paste0("fits/model1fits/",cancer,".rds")[1])["beta"]
+inits$mu <- readRDS(paste0("fits/model1fits/",cancer,".rds")[1])["mu"]
 
-obs <- incidenceData$`Rate per 100,000`/max(incidenceData$`Rate per 100,000`)
+obs <- FittedData$y/ max(FittedData$y)
 #fitting after normalising
 fit <- nls.lm(par = inits, lower = a, upper = b,
-              fn = residFun, mdl = f, fxdParms = prs,observed = obs,t = tpts,
-              wghts = wght, control = nls.lm.control(nprint=0,  ftol = 1e-4))
-#predictions using the fitted values
-unWghtdPreds <- getPred(f, tpts, fit$par, prs)
-prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wght)
+                          fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
+                          control = nls.lm.control(nprint=0,  ftol = 1e-3))
+
+prdctns <- getPred(f, FittedData$x, fit$par, prs)
 
 
-#**********************************plotting****************************************
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
-saveRDS(fit, paste0("fits/model2fits/",cancer,".rds")[1])
-
-jpeg(paste0('figures/model2Figs/', cancer,'.jpg'))
-
-age <- incidenceData$Age.ub
-logObs <- log10(obs)
-preds <- log10(prdctns)
-plot(age, logObs,  col = "blue",
-     xlab = "Age", ylab = bquote('log'[10]*' Incidence'), 
-     main = bquote(bold(paste(.(cancer) ," with ",tau," fitted"))))
-lines(age, preds)
-#Calculating R^2
-Rsquare <- cor(logObs,preds); Rsquare^2
-
-#Calculating the AIC
+#function to Calculate the AIC
 logL <- function(object, REML = FALSE, ...) { 
   
   res <- object$fvec 
@@ -120,12 +96,33 @@ logL <- function(object, REML = FALSE, ...) {
   
 }
 
+#Calculating R^2
+Rsquare <- (cor(log(obs),log(prdctns)))^2
+
+#Calculating AIC
 perfom <- 2 * (length(fit$par) + 1) - 2 * logL(fit)
+
+fitResults <- c(beta = fit$par$beta, mu = fit$par$mu, tau = fit$par$tau, AIC = perfom, Rsqr = Rsquare)
+
+saveRDS(fitResults, paste0("fits/model2fits/",cancer,".rds")[1])
+
+jpeg(paste0('figures/model2Figs/', cancer,'.jpg'))
+
+age <- FittedData$x
+logObs <- log10(obs)
+preds <- log10(prdctns)
+plot(age, logObs,  col = "blue",
+     xlab = "Age", ylab = bquote('log'[10]*' Incidence'), type = "p",pch =17,
+     main = bquote(bold(paste(.(cancer) ," with ",tau," fitted"))))
+lines(age, preds, col = "red", lwd = 3)
+
+
 
 vertSpan <- range(logObs)
 least <- vertSpan[1]
 space <- (vertSpan[2]-vertSpan[1])/12
-
+#text(70, least + 5*space, paste('\nAIC = ', round(perfom,4), '\nRSS=' , round(fit$deviance,4),  pos = 4)) 
+#paste("Mean =", round(MyMean, 1), "\nMedian =", round(MyMedian, 1), "\nStd.Dev =", round(MySd, 1)), pos = 4)
 text(70, (least + 0*space), cex = 1.2, bquote(paste(beta, '=' , .(round(fit$par$beta,6)))))
 text(70, (least + 1*space), cex = 1.2, bquote(paste(tau, '=' , .(round(fit$par$tau,6)))))
 text(70, (least + 2*space), cex = 1.2, bquote(paste(mu, '=' , .(round(fit$par$mu,4)))))
@@ -136,10 +133,4 @@ text(70, (least + 6*space), cex = 1.2, bquote(paste('AIC = ', .(round(perfom,4))
 text(70, (least + 7*space), cex = 1.2, expression(bold('Performance')))
 
 dev.off()
-
-# fit_results <- list(
-#   fit = fit,
-#   tpts = tpts,
-#   wght = wght
-# )
-# saveRDS(fit_results, paste0("fits/model2fits/",cancer,".rds"))
+#saveRDS(fit, paste0("fits/model1fits/",cancer,".rds"))

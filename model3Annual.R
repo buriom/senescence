@@ -16,7 +16,7 @@ library("minpack.lm")
 
 #list of fixed parameters from literature
 prs <- list(
-  h=50, n=1, a=1/(33.33*365)#delta = 0.001, 
+  h=50, n=1, a=1/(33.33)#delta = 0.001, 
 )
 
 #proportion of the T cell population with x no. of divisions at time t
@@ -64,27 +64,6 @@ residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
-#********************************* data fitting ******************************
-.args <- c("preProcessed/Thyroid_data.rds")
-
-.args <- commandArgs(trailingOnly = TRUE)
-
-#load the data and calculate the population weights in each class
-FittedData <- readRDS(.args[1])
-#incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
-
-#initial values for fitting
-inits <- list(mu=30.8672, tau=0.0017, delta = 0.0027); a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
-obs <- FittedData$y/ max(FittedData$y)
-#fitting after normalising
-fit <- nls.lm(par = inits, lower = a, upper = b,
-              fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
-              control = nls.lm.control(nprint=1,  ftol = 1e-2))
-
-prdctns <- getPred(f, FittedData$x, fit$par, prs)
-
-
 #function to Calculate the AIC
 logL <- function(object, REML = FALSE, ...) { 
   
@@ -105,6 +84,35 @@ logL <- function(object, REML = FALSE, ...) {
   val 
   
 }
+#********************************* data fitting ******************************
+
+.args <- c("preProcessed/Hypopharynx_data.rds")
+
+.args <- commandArgs(trailingOnly = TRUE)
+
+#load the data and calculate the population weights in each class
+FittedData <- readRDS(.args[1])
+#incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
+cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+
+#initial values for fitting
+inits <- list(mu=30, tau=0.0023962, delta = 0.0047962); a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
+prevfits <- readRDS(paste0("fits/model3fits/",cancer,".rds")[1])
+inits$tau <- unname(prevfits["tau"])
+inits$mu <- unname(prevfits["mu.mu"])
+inits$delta <- unname(prevfits["beta"])
+
+
+obs <- FittedData$y/ max(FittedData$y)
+#fitting after normalising
+fit <- nls.lm(par = inits, lower = a, upper = b,
+              fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
+              control = nls.lm.control(nprint=1,  ftol = 1e-2))
+
+prdctns <- getPred(f, FittedData$x, fit$par, prs)
+
+
+
 
 #Calculating R^2
 Rsquare <- (cor(log(obs),log(prdctns)))^2
@@ -143,3 +151,4 @@ text(70, (least + 6*space), cex = 1.2, bquote(paste('AIC = ', .(round(perfom,4))
 text(70, (least + 7*space), cex = 1.2, expression(bold('Performance')))
 
 dev.off()
+
