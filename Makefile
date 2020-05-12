@@ -1,11 +1,7 @@
-comma := ,
-empty :=
-  space := $(empty) $(empty)
-
 default: test
-
+	
 test:
-	@echo '$(FIGNAMES)'
+	@echo '$(FIG1JPG)'
 # $^ == the dependencies before '|'
 # $| == the dependencies after '|'
 # $@ == the target
@@ -37,14 +33,13 @@ vpath %_data.rds $(PROCESSEDIR)
 
 #plotting figures
 ALLSRCS := $(shell cd $(PROCESSEDIR); ls *_data.rds)
-#ALLSRCS := ProstateCancer_proc.csv TestisCancer_proc.csv BreastCancer_proc.csv CervixUteriCancer_proc.csv CervixUteriCancer_proc.csv CorpusandUterusNOSCancer_proc.csv FemalegenitalsystemCancer_proc.csv OvaryCancer_proc.csv VaginaCancer_proc.csv VulvaCancer_proc.csv
 
 FIG1JPG := $(addprefix $(FIG1DIR)/,$(ALLSRCS:_data.rds=.jpg))
 FIG2JPG := $(addprefix $(FIG2DIR)/,$(ALLSRCS:_data.rds=.jpg))
 FIG3JPG := $(addprefix $(FIG3DIR)/,$(ALLSRCS:_data.rds=.jpg))
 FIGNAMES := $(FIG1JPG) $(FIG2JPG)# $(FIG3JPG)
 
-
+# $(t:p=r) Replace words matching p with r in t
 FITS1RDS := $(addprefix $(FITS1DIR)/,$(ALLSRCS:_data.rds=.rds))
 FITS2RDS := $(addprefix $(FITS2DIR)/,$(ALLSRCS:_data.rds=.rds))
 FITS3RDS := $(addprefix $(FITS3DIR)/,$(ALLSRCS:_data.rds=.rds))
@@ -60,7 +55,7 @@ $(FIG1DIR)/%.jpg: model1.R $(PROCESSEDIR)/%_data.rds | $(FIG1DIR)
 $(FIG2DIR)/%.jpg: model2.R $(PROCESSEDIR)/%_data.rds | $(FIG2DIR)
 	-Rscript $^ $@
   
-$(FIG3DIR)/%.jpg: model3Annual.R $(PROCESSEDIR)/%_data.rds | $(FIG3DIR)
+$(FIG3DIR)/%.jpg: model3monthly.R $(PROCESSEDIR)/%_data.rds | $(FIG3DIR)
 	-Rscript $^ $@
   
   

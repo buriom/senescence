@@ -25,7 +25,9 @@ for(Cancer in allCancers){
   if(sum(DataSubset$AgeAdjusted_Rate, na.rm = TRUE)==0){
     next
   }
-  
+  # if(sum(as.numeric(as.character(DataSubset$AgeAdjusted_Rate)), na.rm = TRUE)==0){
+  # next
+  # }
   Converted.Age <- Convert1Year(DataSubset$Age_recode_with_single_ages_and_85)
   Converted.Age[Converted.Age==84] <- NA
   

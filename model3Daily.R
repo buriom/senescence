@@ -3,8 +3,6 @@
 #, i.e   mu, delta and tau
 #*******************************************************************************
 library("minpack.lm")
-library(lhs)
-library(parallel)
 
 #******************************  functions **********************************
 #Function for the fraction of T cells with x divisions at time t; f_t
@@ -37,126 +35,102 @@ f <- function(x, t, tau, mu, beta, delta, fxdParms=prs) with(fxdParms, {
 
 #*****Calculating aging whilst updating B_t at each time step (1 yr steps) *****
 getPred <- function(mdl, t, parms, fxdParms){
-  t <- (t-min(t)+1)*365
+  #diffrce <- (20+(14-length(t))*5)
   beta <- parms$delta
   #prb <- dpois(0:100,parms$mu)
-  mylist2 <- c()
-  for(j in 1:length(t)){
-    #calculating the propotions for all 0...100 cell divisions 
-    prb <- sapply(0:100, mdl, t = t[j], parms$tau, parms$mu,
-                  beta, parms$delta, fxdParms)
-    #updating beta at each time step, i.e after a year
-    beta <- (parms$delta-parms$tau*exp(-fxdParms$a*t[j]))/
-      (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
-                                          fxdParms$h^fxdParms$n)) * prb))
-    #calculation immunoscence predictor by normalising the propotions from above
-    mylist2[j] <- sum((prb/sum(prb))[50:100])
+  mylist1 <- list()
+  for (i in 1:length(t)){
+    mylist2 <- c()
+    for(j in 1:length(t[[i]])){
+      #calculating the propotions for all 0...100 cell divisions 
+      prb <- sapply(0:100, mdl, t = t[[i]][j], parms$tau, parms$mu,
+                    beta, parms$delta, fxdParms)
+      #updating beta at each time step, i.e after a year
+      beta <- (parms$delta-parms$tau*exp(-fxdParms$a*t[[i]][j]))/
+        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
+                                            fxdParms$h^fxdParms$n)) * prb))
+      #calculation immunoscence predictor by normalising the propotions from above
+      mylist2[j] <- sum((prb/sum(prb))[50:100])
+    }
+    mylist1[[i]] <- mylist2 
   }
-  return(mylist2)
+  return(mylist1)
 }
+
 #test
-system.time(b <- getPred(f, FittedData$x,  inits, prs))
-b
-getBestPred <- function(mdl, t, parms, fxdParms){
-  t <- (t-min(t)+1)*365
-  beta <- parms$delta
+system.time(b <- getPred(f, tpts[1:2],  inits, prs))
+#b
+
+bestPrdctns <- function(mdl, t, parms, fxdParms){
+  #diffrce <- (20+(14-length(t))*5)
   #prb <- dpois(0:100,parms$mu)
-  mylist2 <- c()
-  mylist1 <- c()
-  for(j in 1:length(t)){
-    mylist1[i] <- beta
-    #calculating the propotions for all 0...100 cell divisions 
-    prb <- sapply(0:100, mdl, t = t[j], parms$tau, parms$mu,
-                  beta, parms$delta, fxdParms)
-    #updating beta at each time step, i.e after a year
-    beta <- (parms$delta-parms$tau*exp(-fxdParms$a*t[j]))/
-      (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
-                                          fxdParms$h^fxdParms$n)) * prb))
-    #calculation immunoscence predictor by normalising the propotions from above
-    mylist2[j] <- sum((prb/sum(prb))[50:100])
+  beta <- parms$delta
+  propnsList <- list()
+  betaList <- list()
+  for (i in 1:length(t)){
+    mylist2 <- c()
+    mylist3 <- c()
+    for(j in 1:length(t[[i]])){
+      mylist3[j] <- beta
+      #calculating the propotions for all 0...100 cell divisions 
+      prb <- sapply(0:100, mdl, t = t[[i]][j], parms$tau, parms$mu,
+                    beta, parms$delta, fxdParms)
+      beta <- (parms$delta - parms$tau*exp(-fxdParms$a*t[[i]][j]))/
+        (1 - 2 * sum(((0:100)^fxdParms$n/((0:100)^fxdParms$n + 
+                                            fxdParms$h^fxdParms$n)) * prb))
+      mylist2[j] <- sum((prb/sum(prb))[50:100])
+    }
+    propnsList[[i]] <- mylist2 
+    betaList[[i]] <- mylist3
   }
-  return(list(mylist2,mylist1))
+  return(list(propnsList,betaList))
 }
-
-
+system.time(b2 <- bestPrdctns(f, tpts,  inits, prs))
 
 #calculating the disparity between predictions and observed data
 residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
-  prdctns <- getPred(mdl, t, par, fxdParms)
-  resids <- log(prdctns) - log(observed)
+  prdctns <-  getPred(mdl, t, par, fxdParms)
+  #prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds,wghts)
+  resids <- log10(unlist(lapply(prdctns, mean))) - log10(observed)
   return(ifelse(is.nan(resids), 1e6, resids))
 }
 
-#function to Calculate the AIC
-logL <- function(object, REML = FALSE, ...) { 
-  
-  res <- object$fvec 
-  
-  N <- length(res) 
-  
-  val <-  -N * (log(2 * pi) + 1 - log(N) + log(sum(res^2)))/2 
-  
-  ## the formula here corresponds to estimating sigma^2. 
-  
-  attr(val, "df") <- 1L + length(coef(object)) 
-  
-  attr(val, "nobs") <- attr(val, "nall") <- N 
-  
-  class(val) <- "logLik" 
-  
-  val 
-  
-}
-
-#fitting after normalising
-fitter <- function(i){
-  fit <- minpack.lm::nls.lm(par = as.list(Y[i,]), lower = a, upper = b,
-                            fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
-                            control = minpack.lm::nls.lm.control(nprint=0,  ftol = 1e-2))
-}
 #********************************* data fitting ******************************
-.args <- c("preProcessed/Tonsil_data.rds")
+.args <- c("preProcessed/Thyroid_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
 #load the data and calculate the population weights in each class
-FittedData <- readRDS(.args[1])#[-1,]
+FittedData <- readRDS(.args[1])
 #incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
-cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+#incidenceData[dim(incidenceData)[1],2] <- 100
+jug <- FittedData$x
+lu <- jug -1
+FittedData$lb <- (lu-lu[1])*365+1
+FittedData$ub <- (jug-lu[1])*365
+
+tpts <-  mapply(function(i,j) i:j, FittedData$lb, FittedData$ub, 
+                SIMPLIFY = FALSE)
+#extract weight: 4.18 and 0.04 obtained from 
+#https://www.census.gov/prod/cen2010/briefs/c2010br-03.pdf
+# wght <-  mapply(function(i,j) {things <- i:j; ifelse( 
+#   things<50, 1, 4.18-0.04*(things))},FittedData$lb, FittedData$ub, 
+#   SIMPLIFY = FALSE)
+
 
 #initial values for fitting
-#for male genital system inits <- list(mu=30.8672, tau=0.0017, delta = 0.0027); a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
-#inits <- list(mu=33.8672, tau=0.0011, delta = 0.00336); 
-a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
+inits <- list(mu=34.5194, tau=0.000562692, delta = 0.00161717); a <- c(0,0.0005,0.0005); b <- c(100,1, 1)
+
 obs <- FittedData$y/ max(FittedData$y)
+#fitting after normalising
+system.time(fit <- nls.lm(par = inits, lower = a, upper = b,
+              fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
+              control = nls.lm.control(nprint=1,  ftol = 1e-2)))
 
-steps <- 5
-X <- randomLHS(steps, 3)
-Y <- matrix(0, nrow=steps, ncol=3)
-Y[,3] <- qunif(X[,3], 0.001, 0.007)
-Y[,2] <- qunif(X[,2], 0.001, 0.003)
-Y[,1] <- qgamma(X[,1], 45, 1.2)
-
-colnames(Y) <- c("mu","tau","delta")
-
-no_cores <- 4
-
-cl <- makeCluster(no_cores)
-clusterExport(cl, c("prs","f","getPred","residFun","Y","FittedData","a","b","obs"))
-
-system.time(result <- parLapply(cl, 1:steps, fitter))
-
-stopCluster(cl)
-
-getmin <- function(i){
-  tail(result[[i]]$rsstrace,1)
-}
-
-leastRSS <- which.min(sapply(1:length(result), getmin))
-fit <- result[[leastRSS]]
-
-prdctns <- getPred(f, FittedData$x, fit$par, prs)
-
+#predictions using the fitted values
+prdctns <-  bestPrdctns(f, tpts, fit$par, prs)
+unlist(lapply(prdctns, mean))
+#prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds[[1]],wght)
 #Calculating R^2
 Rsquare <- (cor(log(obs),log(prdctns)))^2
 
@@ -171,7 +145,7 @@ jpeg(paste0('figures/model3Figs/', cancer,'.jpg'))
 
 age <- FittedData$x
 logObs <- log10(obs)
-preds <- log10(prdctns)
+preds <- log10()
 plot(age, logObs,  col = "blue",
      xlab = "Age", ylab = bquote('log'[10]*' Incidence'),type = "p",pch =17,
      main = bquote(bold(paste(.(cancer) ," with ",beta[t]))))
