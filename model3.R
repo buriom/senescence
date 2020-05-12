@@ -65,7 +65,7 @@ residFun <- function(par, mdl,  observed, t, wghts, fxdParms){
 }
 
 #********************************* data fitting ******************************
-.args <- c("preProcessed/Thyroid_data.rds")
+.args <- c("preProcessed/MaleGenitalSystem_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 

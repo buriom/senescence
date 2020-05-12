@@ -1,3 +1,10 @@
+library("SEER2R")
+
+AllData <- read.SeerStat(DICfileName = "Incidence-Full-1Y-18.dic",
+                         TXTfileName = "Incidence-Full-1Y-18.txt",
+                         UseVarLabelsInData = TRUE)
+
+allCancers <- unique(trimws(AllData$`Site_recode_ICDO3/WHO_2008`))
 #list of fixed parameters from literature
 prs <- list(
   h=50, n=1, a=1/(33.33*365)#delta = 0.001, 
@@ -208,16 +215,30 @@ for (i in thu) {
     #load the data and calculate the population weights in each class
     FittedData <- readRDS(paste0("preProcessed/", gsub("\\s+","\\",cancer), "_data.rds")[1])
     #incidenceData <- readRDS("preProcessed/StomachCancer_data.rds")
-    mod2 <- Fit2ParModel(FittedData)
-    mod1 <- Fit1ParModel(FittedData)
-    
     obs <- FittedData$y/ max(FittedData$y)
+    FittedData$y <- obs
+    mod2 <- Fit2ParModel(FittedData)
+    mod2R2 <- round(mod2["R^2"],2)
+    mod2AIC <- round(mod2["AIC"],2)
+    
+    mod1 <- Fit1ParModel(FittedData)
+    mod1R2 <- round(mod1["R^2"],2)
+    mod1AIC <- round(mod1["AIC"],2)
     #fitting after normalising
     
     fit <- readRDS(paste0("fits/model3fits/",gsub("\\s+","\\",cancer),".rds")[1])
+    jug <- FittedData$x
+    lu <- jug -1
+    FittedData$lb <- (lu-lu[1])*365+365/12
+    FittedData$ub <- (jug-lu[1])*365
     
-    prdctns <- getPred(f, FittedData$x, list(delta = fit[1], mu = fit[2], tau = fit[3]), prs)
+    tpts <-  mapply(function(i,j) seq(i,j,365/12), FittedData$lb, FittedData$ub, 
+                    SIMPLIFY = FALSE)
     
+    #prdctns <- getPred(f, FittedData$x, list(delta = fit[1], mu = fit[2], tau = fit[3]), prs)
+    #predictions using the fitted values
+    prdctns1 <-  bestPrdctns(f, tpts, list(delta = fit[1], mu = fit[2], tau = fit[3]), prs)
+    prdctns <- unlist(lapply(prdctns1[[1]], mean))
     #jpeg(paste0('figures/model1Figs/', cancer,'.jpg'))
     
     age <- FittedData$x
@@ -235,8 +256,11 @@ for (i in thu) {
     vertSpan <- range(logObs)
     least <- vertSpan[1]
     space <- (vertSpan[2]-vertSpan[1])/12
-    
-    legend(x=55,y=(least + 4*space),c("IM-I","IM-II","Our 2nd Model"),cex=.8,col=c("green", "orange", "red"),lwd=2)
+    ourR2 <- round(fit[5],2)
+    ourAIC <- round(fit[4],2)
+    legend(x=40,y=(least + 4*space),legend = 
+             c(paste("IM-I: R^2=", mod1R2, ", AIC=",mod1AIC),paste("IM-II: R^2=",mod2R2,", AIC=",mod2AIC),
+               paste("B_t Model: R^2=", ourR2, ", AIC=",ourAIC)),cex=.8,col=c("green", "orange", "red"),lwd=2)
   }
 }
 dev.off()
