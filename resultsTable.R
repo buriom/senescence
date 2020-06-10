@@ -151,6 +151,74 @@ Fit1ParModel <- function(FittedData, a=NULL, k_mid=NULL, Rounds=10){
 }
 
 
+Fit3ParModel <- function(FittedData, a=NULL, b=NULL, c=NULL, k_mid=NULL, Rounds=10){
+  
+  StartList <- list(a = runif(1), b = runif(1),c = runif(1), k_mid = 0.05)
+  
+  StartList <- StartList[c(is.null(a), is.null(b), is.null(c))]
+  LowVect <- rep(1e-10, times=length(StartList))
+  
+  out2_m <-
+    nls(
+      log(y) ~ c*log(x)+log(a / (exp(
+        b * exp(-k_mid * x)
+      ) - 1)),
+      data = FittedData,
+      start = StartList,
+      algorithm = "port",
+      lower = LowVect,
+      control = nls.control(
+        maxiter = 1000,
+        tol = 1e-8,
+        warnOnly = TRUE
+      )
+    )
+  
+  PEst <- summary(out2_m)$parameters[, "Estimate"]
+  names(PEst) <- rownames(summary(out2_m)$parameters)
+  StartList[names(PEst)] <- PEst
+  
+  if(Rounds > 0){
+    for (i in 1:Rounds) {
+      
+      out2_m <-
+        nls(
+          log(y) ~ c*log(x)+log(a / (exp(
+            b * exp(-k_mid * x)
+          ) - 1)),
+          data = FittedData,
+          start = StartList,
+          lower = LowVect,
+          algorithm = "port",
+          control = nls.control(
+            maxiter = 1000,
+            tol = 1e-8/i,
+            warnOnly = TRUE
+          )
+        )
+      
+      PEst <- summary(out2_m)$parameters[, "Estimate"]
+      names(PEst) <- rownames(summary(out2_m)$parameters)
+      StartList[names(PEst)] <- PEst
+      
+    }
+  }
+  
+  R2Mb <- 1 - sum((summary(out2_m)$residuals)^2)/sum((log(FittedData$y)-mean(log(FittedData$y)))^2)
+  
+  PVals <- c(NA, NA, NA, NA)
+  names(PVals) <- c("a", "b","c", "k_mid")
+  PVals[names(PEst)] <- PEst
+  PVals[is.na(PVals)] <- c(a, b, c, k_mid)
+  
+  ReturnVect <- c(PVals, AIC(out2_m), R2Mb, deviance(out2_m), sum(summary(out2_m)$residuals^2))
+  
+  names(ReturnVect) <- c("a", "b", "c", "k", "AIC", "R^2", "Dev", "Resid")
+  
+  return(ReturnVect)
+  
+}
+
 
 FitPLModel <- function(FittedData, Rounds=10){
   
@@ -232,6 +300,15 @@ TryFitting <- function(Model, FittedData, a = NULL, b = NULL, k_mid = NULL,
     }
   }
   
+  if(Model == "PLIM"){
+    for(i in 1:Retires){
+      TR <- try(ModelPars <- Fit3ParModel(FittedData = FittedData, a = NULL, b = NULL,c = NULL, k_mid = NULL, Rounds = Rounds))
+      if(length(TR)!=1){
+        AllFits <- rbind(AllFits, ModelPars)
+      }
+    }
+  }
+  
   
   if(Model == "TM"){
     for(i in 1:Retires){
@@ -260,7 +337,6 @@ AllData$Lower_Confidence_Interval <- as.numeric(levels(AllData$Lower_Confidence_
 AllData$Upper_Confidence_Interval <- as.numeric(levels(AllData$Upper_Confidence_Interval))[AllData$Upper_Confidence_Interval]
 
 
-Model.To.Use <- "A"
 SumData <- NULL
 
 for(Cancer in unique(trimws(AllData$`Site_recode_ICDO3/WHO_2008`))){
@@ -299,26 +375,33 @@ for(Cancer in unique(trimws(AllData$`Site_recode_ICDO3/WHO_2008`))){
   FittedData <- data.frame(cbind(XFil, YFil))
   colnames(FittedData) <- c("x", "y")
   # rescaled this way because min-max would result in log(o) = Inf
-  FittedData$y <-  FittedData$y/ max(FittedData$y)
+  #FittedData$y <-  FittedData$y/ max(FittedData$y)
   
-  ModData.A <- TryFitting(Model = "A", FittedData = FittedData,k_mid = k_mid,
-                          Rounds = 4, Retires = 50)
+  # ModData.A <- TryFitting(Model = "A", FittedData = FittedData,k_mid = k_mid,
+  #                         Rounds = 4, Retires = 50)
+  # 
+  # ModData.B <- TryFitting(Model = "B", FittedData = FittedData,k_mid = k_mid,
+  #                         Rounds = 9, Retires = 100)
+  # ModData.C <- TryFitting(Model = "C", FittedData = FittedData,
+  #                         Rounds = 9, Retires = 100)
+  ModData.D <- TryFitting(Model = "PLIM", FittedData = FittedData,
+                          Rounds = 9, Retires = 10)
   
-  ModData.B <- TryFitting(Model = "B", FittedData = FittedData,k_mid = k_mid,
-                          Rounds = 9, Retires = 100)
-  ModData.C <- TryFitting(Model = "C", FittedData = FittedData,
-                          Rounds = 9, Retires = 100)
   
   
-  
-  names(ModData.A) <- paste("IM-I",names(ModData.A), sep = ":")
-  names(ModData.B) <- paste("IM-II",names(ModData.B), sep = ":")
-  names(ModData.C) <- paste("PLM",names(ModData.C), sep = ":")
-  SumData <- rbind(SumData, c(Cancer, ModData.A, ModData.B, ModData.C))
+  # names(ModData.A) <- paste("IM-I",names(ModData.A), sep = ":")
+  # names(ModData.B) <- paste("IM-II",names(ModData.B), sep = ":")
+  # names(ModData.C) <- paste("PLM",names(ModData.C), sep = ":")
+  names(ModData.D) <- paste("PLIM",names(ModData.D), sep = ":")
+  SumData <- rbind(SumData, c(Cancer, ModData.D))#,  ModData.A,ModData.B, ModData.C))
   
   
 }
 
+summary(bestFits[bestFits$Cancer.Site %in% fit3names,7])
+sum(bestFits[bestFits$Cancer.Site %in% fit3names,7]>0.95)
+summary(as.numeric(SumData3[,7]))
+sum(as.numeric(SumData3[,7]>0.95))
 
 SumData[,1] <- trimws(SumData[,1])
 colnames(SumData)[1] <- "Cancer/Site"
@@ -329,19 +412,21 @@ AllData <- read.SeerStat(DICfileName = "Incidence-Full-1Y-18.dic",
                          UseVarLabelsInData = TRUE)
 
 allCancers <- unique(trimws(AllData$`Site_recode_ICDO3/WHO_2008`))
-#d <- sort(allCancers)[c(4,37,48,51,61,66,69)]
+  #d <- sort(allCancers)[c(4,37,48,51,61,66,69)]
 #allCancers[100] <- "Male Genital System"
 
 sumData2 <- NULL
-for(cancer in allCancers[-c(96,100)]){
+for(Cancer in allCancers[-c(96,100)]){
   #load the data and calculate the population weights in each class
-  fit <- try(readRDS(paste0("fits/model3fits/",gsub("\\s+","\\",cancer),".rds")[1]))
+  #fit <- try(readRDS(paste0("fits/model3fits/",gsub("\\s+","\\",Cancer),".rds")[1]))# model3 fits
+  fit <- try(readRDS(paste0("fits/model1fits/",gsub("\\s+","\\",Cancer),".rds")[1])) # model1 fits
+  
   names(fit) <- paste("Sene-Mdl",names(fit), sep = ":")
-  sumData2 <- rbind(sumData2, c(cancer, fit))
+  sumData2 <- rbind(sumData2, c(Cancer, fit))
 }
-colnames(sumData2)[1] <- "Cancer/Site"
+colnames(sumData2)[1] <- "Cancer.Site"
 
 
-cmplteData <- left_join(as.data.frame(sumData2),as.data.frame(SumData), "Cancer/Site")
+cmplteData <- left_join(as.data.frame(sumData2),as.data.frame(SumData), "Cancer.Site")
 finalData <- cmplteData[-4,]
 write.csv(finalData,"resultsTable.csv")

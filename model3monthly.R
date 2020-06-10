@@ -130,13 +130,14 @@ fitter <- function(i){
                                                                  ftol = 1e-2))
 }
 #********************************* data fitting ******************************
-.args <- c("preProcessed/KaposiSarcoma_data.rds")
+.args <- c("preProcessed/Mesothelioma_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
 #load the data and calculate the population weights in each class
 FittedData <- readRDS(.args[1])
 cancer <- gsub(".*preProcessed/\\s*|_data.rds*", "", .args)
+cancer <- gsub("([a-z])([A-Z])", "\\1 \\2", cancer)
 jug <- FittedData$x
 lu <- jug -1
 FittedData$lb <- (lu-lu[1])*365+365/12
@@ -151,40 +152,10 @@ tpts <-  mapply(function(i,j) seq(i,j,365/12), FittedData$lb, FittedData$ub,
 #   SIMPLIFY = FALSE)
 a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
 obs <- FittedData$y/ max(FittedData$y)
-#prevFits <- readRDS(paste0("fits/model3fits/",cancer,".rds")[1])
-#inits <- list(mu=unname(prevFits["mu"]), tau=unname(prevFits["tau"]), delta = unname(prevFits["delta"]))
-# steps <- 4
-# X <- randomLHS(steps, 3)
-# Y <- matrix(0, nrow=steps, ncol=3)
-# Y[,3] <- qunif(X[,3], 0.001, 0.007)
-# Y[,2] <- qunif(X[,2], 0.001, 0.003)
-# Y[,1] <- qgamma(X[,1], 45, 1.2)
-# 
-# colnames(Y) <- c("mu","tau","delta")
-# 
-# no_cores <- 4
-# 
-# cl <- makeCluster(no_cores)
-# clusterExport(cl, c("prs","f","getPred","residFun","Y","tpts","a","b","obs"))
-# 
-# system.time(result <- parLapply(cl, 1:steps, fitter))
-# 
-# stopCluster(cl)
-# 
-# getmin <- function(i){
-#   tail(result[[i]]$rsstrace,1)
-# }
-# 
-# leastRSS <- which.min(sapply(1:length(result), getmin))
-# fit <- result[[leastRSS]]
-
-#prdctns <- getPred(f, FittedData$x, fit$par, prs)
-
 
 # #initial values for fitting
-inits <- list(mu=37.1327, tau=0.001799, delta = 0.0012); a <- c(0,1e-7,1e-7); b <- c(100,1, 1)
-# 
-# obs <- FittedData$y/ max(FittedData$y)
+inits <- list(mu=30.1327, tau=0.002199, delta = 0.0013); a <- c(0,1e-7,1e-7); b <- c(100,1, 1)
+
 #fitting after normalising
 system.time(fit <- nls.lm(par = inits, lower = a, upper = b,
                           fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = tpts,
@@ -194,6 +165,7 @@ system.time(fit <- nls.lm(par = inits, lower = a, upper = b,
 prdctns1 <-  bestPrdctns(f, tpts, fit$par, prs)
 prdctns <- unlist(lapply(prdctns1[[1]], mean))
 #prdctns <-  mapply(function(x,y) sum(x * y)/sum(y), unWghtdPreds[[1]],wght)
+
 #Calculating R^2
 Rsquare <- (cor(log(obs),log(prdctns)))^2
 
@@ -205,13 +177,14 @@ fitResults <- c(delta = fit$par$delta, mu = fit$par$mu, tau = fit$par$tau, AIC =
 saveRDS(fitResults, paste0("fits/model3fits/",cancer,".rds")[1])
 
 jpeg(paste0('figures/model3Figs/', cancer,'.jpg'))
-
+#setEPS()
+#postscript(paste0('figures/pub/model3Figs/', cancer,'.eps'))
 age <- FittedData$x
 logObs <- log10(obs)
 preds <- log10(prdctns)
 plot(age, logObs,  col = "blue",
-     xlab = "Age", ylab = bquote('log'[10]*' Incidence'),type = "p",pch =17,
-     main = bquote(bold(paste(.(cancer) ," with ",beta[t]))))
+       xlab = "Age", ylab = bquote('log'[10]*' Incidence'),type = "p",pch =17,
+     main = bquote(.(cancer))) #bquote(bold(paste(.(cancer) ," with ",beta[t])))
 lines(age, preds, col = "red", lwd = 3)
 
 #anotating the graph

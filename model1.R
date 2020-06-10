@@ -68,7 +68,7 @@ fit <- nls.lm(par = inits, lower = a, upper = b,
                           fn = residFun, mdl = f, fxdParms = prs, observed = obs, t = FittedData$x,
                           control = nls.lm.control(nprint=0,  ftol = 1e-3))
 
-fit <- readRDS(fitResults, paste0("fits/model2fits/",cancer,".rds")[1])
+#fit <- readRDS(fitResults, paste0("fits/model2fits/",cancer,".rds")[1])
 
 prdctns <- getPred(f, FittedData$x, fit$par, prs)
 
@@ -103,8 +103,9 @@ perfom <- 2 * (length(fit$par) + 1) - 2 * logL(fit)
 
 fitResults <- c(beta = fit$par$beta, mu = fit$par$mu, AIC = perfom, Rsqr = Rsquare)
 
-#saveRDS(fitResults, paste0("fits/model1fits/",cancer,".rds")[1])
-
+saveRDS(fitResults, paste0("fits/model1fits/",cancer,".rds")[1])
+# setEPS()
+# postscript(paste0('figures/pub/model3Figs/', cancer,'.eps'))
 jpeg(paste0('figures/model1Figs/', cancer,'.jpg'))
 
 age <- FittedData$x
@@ -112,7 +113,8 @@ logObs <- log10(obs)
 preds <- log10(prdctns)
 plot(age, logObs,  col = "blue",
      xlab = "Age", ylab = bquote('log'[10]*' Incidence'), type = "p",pch =17,
-     main = bquote(bold(paste(.(cancer) ," with ",tau," fixed"))))
+     main = bquote(bold(paste(.(cancer) ," with contant ",beta))))
+          # bquote(bold(paste(.(cancer) ," with ",tau," fixed"))))
 lines(age, preds, col = "red", lwd = 3)
 
 
@@ -120,7 +122,7 @@ lines(age, preds, col = "red", lwd = 3)
 vertSpan <- range(logObs)
 least <- vertSpan[1]
 space <- (vertSpan[2]-vertSpan[1])/12
-#text(70, least + 5*space, paste('\nAIC = ', round(perfom,4), '\nRSS=' , round(fit$deviance,4),  pos = 4)) 
+#text(70, least + 5*space, paste('\nAIC = ', round(perfom,4), '\nRSS=' , round(fit$deviance,4),  pos = 4))
 #paste("Mean =", round(MyMean, 1), "\nMedian =", round(MyMedian, 1), "\nStd.Dev =", round(MySd, 1)), pos = 4)
 text(70, (least + 0), cex = 1.2, bquote(paste(beta, '=' , .(round(fit$par$beta,6)))))
 text(70, (least + 1*space), cex = 1.2, bquote(paste(mu, '=' , .(round(fit$par$mu,4)))))
@@ -131,4 +133,3 @@ text(70, (least + 5*space), cex = 1.2, bquote(paste('AIC = ', .(round(perfom,4))
 text(70, (least + 6*space), cex = 1.2, expression(bold('Performance')))
 
 dev.off()
-#saveRDS(fit, paste0("fits/model1fits/",cancer,".rds"))
