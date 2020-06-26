@@ -3,8 +3,8 @@
 #parameters i.e   mu (lambda), delta and tau
 #*******************************************************************************
 library("minpack.lm")
-library(lhs)
-library(parallel)
+#library(lhs)
+#library(parallel)
 #******************************  functions **********************************
 #Function for the fraction of T cells with x divisions at time t; f_t
 #Parameters: delta = turn-over rate (per day), h = hayflick limit, 
@@ -121,16 +121,16 @@ logL <- function(object, REML = FALSE, ...) {
 }
 
 
-#fitting after normalising
-fitter <- function(i){
-  fit <- minpack.lm::nls.lm(par = as.list(Y[i,]), lower = a, upper = b,
-                            fn = residFun, mdl = f, fxdParms = prs, 
-                            observed = obs, t = tpts, 
-                            control = minpack.lm::nls.lm.control(nprint=0,  
-                                                                 ftol = 1e-2))
-}
+# #fitting after normalising
+# fitter <- function(i){
+#   fit <- minpack.lm::nls.lm(par = as.list(Y[i,]), lower = a, upper = b,
+#                             fn = residFun, mdl = f, fxdParms = prs, 
+#                             observed = obs, t = tpts, 
+#                             control = minpack.lm::nls.lm.control(nprint=0,  
+#                                                                  ftol = 1e-2))
+# }
 #********************************* data fitting ******************************
-.args <- c("preProcessed/Mesothelioma_data.rds")
+.args <- c("preProcessed/OtherAcuteLeukemia_data.rds")
 
 .args <- commandArgs(trailingOnly = TRUE)
 
@@ -154,7 +154,7 @@ a <- c(0,1e-7,0.0005); b <- c(100,1, 1)
 obs <- FittedData$y/ max(FittedData$y)
 
 # #initial values for fitting
-inits <- list(mu=30.1327, tau=0.002199, delta = 0.0013); a <- c(0,1e-7,1e-7); b <- c(100,1, 1)
+inits <- list(mu=34.1327, tau=0.00271624705029, delta = 0.001109950982628); a <- c(0,1e-7,1e-7); b <- c(100,1, 1)
 
 #fitting after normalising
 system.time(fit <- nls.lm(par = inits, lower = a, upper = b,
